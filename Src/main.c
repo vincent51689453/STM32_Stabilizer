@@ -51,17 +51,19 @@ TIM_HandleTypeDef htim4;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-MPU6050_t MPU6050;
+MPU6050_t MPU6050;                   
 
 volatile int timer_counter = 0;      //timer interrupt counter
+
 volatile bool MPU_Sampling = false;  //flag to control sampling of MPU6050
 bool average_filter = false;         //flag to control average filtering
+bool plot_curve = true;             //flag to enable/disable curve plotting
 
 int counter = 0;                     //sample taking counter
 const int num_samples = 200;         //number of samples for taking average
 
-double Kalman_X_buffer;              //Storing num_samples of Kalman_X to perform averaging
-double Kalman_Y_buffer;              //Storing num_samples of Kalman_Y to perform averaging
+double Kalman_X_buffer = 0;          //Storing num_samples of Kalman_X to perform averaging
+double Kalman_Y_buffer = 0;          //Storing num_samples of Kalman_Y to perform averaging
 
 double offset_x;                     //noise remoiving from Kalman_X
 double offset_y;                     //noise removing from Kalman_Y
@@ -155,14 +157,24 @@ int main(void)
 				//When average filer is not executed
 				Kalman_Y_buffer += MPU6050.KalmanAngleY;
 				Kalman_X_buffer += MPU6050.KalmanAngleX;
-				printf("[LOG] Counter:%d | Kalman Filter: Enabled | Average Filter: Pending\r\n",counter);
-				printf("[LOG] X: %.2f degree | Y: %.2f degree\r\n",MPU6050.KalmanAngleX,MPU6050.KalmanAngleY);
-				printf("[SYSTEM]Please do not move your gyro sensor!\r\n");
+				if(!plot_curve)
+				{
+				  printf("[LOG] Counter:%d | Kalman Filter: Enabled | Average Filter: Pending\r\n",counter);
+				  printf("[LOG] X: %.2f degree | Y: %.2f degree\r\n",MPU6050.KalmanAngleX,MPU6050.KalmanAngleY);
+				  printf("[SYSTEM]Please do not move your gyro sensor!\r\n");
+				}else{
+					printf("$%d %d;\r\n",(int)MPU6050.KalmanAngleX,(int)MPU6050.KalmanAngleY);
+				}
 			}else{
 				//When average filter is ready
 				X_output = MPU6050.KalmanAngleX - offset_x;
 				Y_output = MPU6050.KalmanAngleY - offset_y;
-				printf("[LOG] Smoothed X: %.2f | Smoothed Y: %.2f\r\n",X_output,Y_output);
+				if(!plot_curve)
+				{
+				  printf("[LOG] Smoothed X: %.2f | Smoothed Y: %.2f\r\n",X_output,Y_output);
+				}else{
+					printf("$%d %d;\r\n",(int)X_output,(int)Y_output);
+				}
 			}
 			
 			//Find average offset
@@ -392,7 +404,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-
+  printf("Fatal Error -> Please contact Vincent\r\n");
   /* USER CODE END Error_Handler_Debug */
 }
 
