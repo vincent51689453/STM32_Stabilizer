@@ -53,8 +53,21 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 MPU6050_t MPU6050;
 
-volatile int timer_counter = 0;
-volatile bool MPU_Sampling = false;
+volatile int timer_counter = 0;      //timer interrupt counter
+volatile bool MPU_Sampling = false;  //flag to control sampling of MPU6050
+bool average_filter = false;         //flag to control average filtering
+
+int counter = 0;                     //sample taking counter
+const int num_samples = 200;         //number of samples for taking average
+
+double Kalman_X_buffer;              //Storing num_samples of Kalman_X to perform averaging
+double Kalman_Y_buffer;              //Storing num_samples of Kalman_Y to perform averaging
+
+double offset_x;                     //noise remoiving from Kalman_X
+double offset_y;                     //noise removing from Kalman_Y
+
+double X_output;                     //Resultant X
+double Y_output;                     //Resultant Y
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -135,7 +148,33 @@ int main(void)
 		{
 			//Read MPU6050 value and processed by Kalman Filter
       MPU6050_Read_All(&hi2c1,&MPU6050);
-			printf("[LOG] KalmanX: %.2f | KalmanY: %.2f\r\n",MPU6050.KalmanAngleX,MPU6050.KalmanAngleY);
+			
+			//Average Filter
+			if(!average_filter)
+			{
+				//When average filer is not executed
+				Kalman_Y_buffer += MPU6050.KalmanAngleY;
+				Kalman_X_buffer += MPU6050.KalmanAngleX;
+				printf("[LOG] Counter:%d | Kalman Filter: Enabled | Average Filter: Pending\r\n",counter);
+				printf("[LOG] X: %.2f degree | Y: %.2f degree\r\n",MPU6050.KalmanAngleX,MPU6050.KalmanAngleY);
+				printf("[SYSTEM]Please do not move your gyro sensor!\r\n");
+			}else{
+				//When average filter is ready
+				X_output = MPU6050.KalmanAngleX - offset_x;
+				Y_output = MPU6050.KalmanAngleY - offset_y;
+				printf("[LOG] Smoothed X: %.2f | Smoothed Y: %.2f\r\n",X_output,Y_output);
+			}
+			
+			//Find average offset
+			if((counter==num_samples)&&(!average_filter))
+			{
+				//These statements will only be executed once after taking num_samples, then disable.
+				average_filter = true;
+				offset_x = Kalman_X_buffer/num_samples;
+				offset_y = Kalman_Y_buffer/num_samples;
+			}
+			printf("\r\n");
+			counter++;
 		}
 		
     /* USER CODE END WHILE */
