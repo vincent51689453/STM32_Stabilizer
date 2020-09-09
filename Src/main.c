@@ -75,16 +75,19 @@ double offset_y;                             //noise removing from Kalman_Y
 double X_output;                             //Resultant X
 double Y_output;                             //Resultant Y
 
+
 enum servo_motor_type{raw_servo=0,pitch_servo=2};       //Servo motor index related to PCA9685
 
-const int raw_init_angle = 0;                           //Initial raw angle for stabilizer
-const int pitch_init_angle = 0;                         //Initial pitch angle for stabilizer
+const int raw_init_angle = 90;                           //Initial raw angle for stabilizer
+const int pitch_init_angle = 90;                         //Initial pitch angle for stabilizer
 
 const int pitch_max = 30;                               //Mechanical limitation (please confirm with ME designer)
 const int pitch_min = -30;                              //Mechanical limitation (please confirm with ME designer)
 
 const int raw_max = 15;                                 //Mechanical limitation (please confirm with ME designer)
 const int raw_min = -15;                                //Mechanical limitation (please confirm with ME designer)
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,6 +101,9 @@ static void MX_TIM4_Init(void);
 float trimf(float measurement, float start, float peak, float end);   //Fuzzy Logic: triangular membership function
 float Rmf(float measurement, float top, float bottom);                //Fuzzy Logic: R membership function
 float Lmf(float measurement, float bottom, float top);                //Fuzzy Logic: L membership function
+
+int raw_FLC(double error);          //raw fuzzy logic controller
+int pitch_FLC(double error);        //pitch fuzzy logic controller
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -503,6 +509,35 @@ float Lmf(float measurement, float bottom, float top)
 	return fx;
 }
 
+int pitch_FLC(double error)
+{
+	int servo_adjust = 0;
+	//This controller should try to keep Y_output = 0 (balance)
+	
+	//1.Fuzzification
+	
+	//define pitch input membership functions and levels
+	//1. LN -> Largely negative (the object is sliding down rapidly)
+	//2. N  -> Negative         (the object is sliding down slowly)
+	//3. Z  -> Zero             (the object is still stationary)
+	//4. P  -> Positive         (the object is sliding down slowly)
+	//5. LP -> Largely positive (the object is sliding down rapidly)
+	
+	
+  //2.Inferencing
+	
+	
+	//3.Defuzzification: Weighted Average Method
+	
+	//define servo adjustment membership functions and levels
+	//1. LXC -> Largely clockwise
+	//2. XC  -> Clockwise        
+	//3. UC  -> Unchanged             
+	//4. CC  -> Counterclockwise        
+	//5. LCC -> Largely counterclockwise	
+	
+	return servo_adjust;
+}
 
 /* USER CODE END 4 */
 
