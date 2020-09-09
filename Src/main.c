@@ -39,6 +39,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define MIN(x,y) ((x<y)?x:y)
+#define MAX(x,y) (x>y ?x:y)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -60,8 +61,10 @@ MPU6050_t MPU6050;
 volatile int timer_counter = 0;              //timer interrupt counter
 
 volatile bool MPU_Sampling = false;          //flag to control sampling of MPU6050
+volatile bool servo_adjust_enable = false;   //flag to control servo balancing
 bool average_filter = false;                 //flag to control average filtering
-bool plot_curve = true;                      //flag to enable/disable curve plotting
+bool plot_curve = false;                     //flag to enable/disable curve plotting
+
 
 int counter = 0;                             //sample taking counter
 const int num_samples = 200;                 //number of samples for taking average
@@ -76,17 +79,28 @@ double X_output;                             //Resultant X
 double Y_output;                             //Resultant Y
 
 
+int adjust_servo_pitch = 0;		
+int servo_control_pitch = 0;
+
+
 enum servo_motor_type{raw_servo=0,pitch_servo=2};       //Servo motor index related to PCA9685
 
-const int raw_init_angle = 90;                           //Initial raw angle for stabilizer
-const int pitch_init_angle = 90;                         //Initial pitch angle for stabilizer
+const int raw_init_angle = 91;                           //Initial raw angle for stabilizer   (make X_output = 0)
+const int pitch_init_angle = 98;                         //Initial pitch angle for stabilizer( make Y_output = 0)
 
-const int pitch_max = 30;                               //Mechanical limitation (please confirm with ME designer)
-const int pitch_min = -30;                              //Mechanical limitation (please confirm with ME designer)
+const int pitch_max = 15;                               //Mechanical limitation (please confirm with ME designer)
+const int pitch_min = -15;                              //Mechanical limitation (please confirm with ME designer)
 
 const int raw_max = 15;                                 //Mechanical limitation (please confirm with ME designer)
 const int raw_min = -15;                                //Mechanical limitation (please confirm with ME designer)
 
+
+/*
+When pitch_init_angle + pitch_max => KalmanX = 15
+When pitch_init_angle + pitch_min => KalmanX = -15
+When raw_init_angle   + raw_max   => KalmanY = 15
+When raw_init_angle   + raw_min   => KalmanY = -15
+*/
 
 /* USER CODE END PV */
 
@@ -170,7 +184,7 @@ int main(void)
 	PCA9685_Go();                                               //PCA9685 Initialization
 	SetPWMFreq(50);                                             //Set Servo PWM Frequency
   setServo(pitch_servo,calculate_PWM(pitch_init_angle));      //Set init raw
-	setServo(raw_servo,calculate_PWM(pitch_init_angle));        //Set init pitch
+	setServo(raw_servo,calculate_PWM(raw_init_angle));          //Set init pitch
 	HAL_Delay(200);                                             //Delay for servo mechanical response
   /* USER CODE END 2 */
 
@@ -207,6 +221,26 @@ int main(void)
 				}else{
 					printf("$%d %d;\r\n",(int)X_output,(int)Y_output);
 				}
+				
+				//Fuzzy Logic Balancing
+				if(servo_adjust_enable)
+				{
+				  adjust_servo_pitch = pitch_FLC(X_output);	
+				  servo_control_pitch = pitch_init_angle + adjust_servo_pitch;	
+				  //Protection
+				  if(servo_control_pitch>=(pitch_init_angle+pitch_max))
+				  {
+					  servo_control_pitch = pitch_init_angle+pitch_max;
+				  }
+				  if(servo_control_pitch<=(pitch_init_angle+pitch_min))
+				  {
+					  servo_control_pitch = pitch_init_angle+pitch_min;
+				  }
+				
+				  if(!plot_curve)	printf("servo_control:%d\r\n",servo_control_pitch);
+				  setServo(pitch_servo,calculate_PWM(servo_control_pitch));
+			  }
+				
 			}
 			
 			//Find average offset
@@ -221,7 +255,7 @@ int main(void)
 			counter++;
 		}
 		
-		//TO-DO: Balancing Control
+
 		
     /* USER CODE END WHILE */
 
@@ -460,6 +494,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		  MPU_Sampling = !MPU_Sampling;
 			HAL_GPIO_TogglePin(ONBOARD_LED_GPIO_Port,ONBOARD_LED_Pin);
 	  }	
+		if ((timer_counter%100) == 0)
+		{
+			servo_adjust_enable = !servo_adjust_enable;
+		}
 	}
 }
 
@@ -517,25 +555,26 @@ int pitch_FLC(double error)
 	//1.Fuzzification
 	
 	//define pitch input membership functions and levels
-	//1. LN -> Largely negative (the object is sliding down rapidly)
-	//2. N  -> Negative         (the object is sliding down slowly)
-	//3. Z  -> Zero             (the object is still stationary)
-	//4. P  -> Positive         (the object is sliding down slowly)
-	//5. LP -> Largely positive (the object is sliding down rapidly)
-	
+	//1. N  -> Negative         (the object is sliding down slowly)
+	//2. Z  -> Zero             (the object is still stationary)
+	//3. P  -> Positive         (the object is sliding down slowly)
+
 	
   //2.Inferencing
-	
-	
+
+  double w1 = MAX(Rmf(error,-15,-6),trimf(error,-10,0,10));     //Inference LN & N
+	double w2 = MAX(trimf(error,-10,0,10),Lmf(error,6,15));          //Inference P & LP
+
+	printf("w1:%.2f w2:%.2f\r\n",w1,w2);
 	//3.Defuzzification: Weighted Average Method
 	
 	//define servo adjustment membership functions and levels
-	//1. LXC -> Largely clockwise
-	//2. XC  -> Clockwise        
-	//3. UC  -> Unchanged             
-	//4. CC  -> Counterclockwise        
-	//5. LCC -> Largely counterclockwise	
-	
+	//1. XC  -> Clockwise        
+	//2. UC  -> Unchanged             
+	//3. CC  -> Counterclockwise 
+  servo_adjust = (w1*pitch_max+w2*pitch_min)/(w1+w2);
+	if(!plot_curve)	printf("Servo_adjust: %d\r\n",servo_adjust);
+
 	return servo_adjust;
 }
 
