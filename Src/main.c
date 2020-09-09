@@ -3,7 +3,7 @@
   ******************************************************************************
   * @file           : main.c
   * @brief          : Main program body
-	* @author         : VincentChan
+	* @author         : VincentChan (software) | JasonNgai (mechanical)
   ******************************************************************************
   * @attention
   *
@@ -76,8 +76,15 @@ double X_output;                             //Resultant X
 double Y_output;                             //Resultant Y
 
 enum servo_motor_type{raw_servo=0,pitch_servo=2};       //Servo motor index related to PCA9685
+
 const int raw_init_angle = 0;                           //Initial raw angle for stabilizer
 const int pitch_init_angle = 0;                         //Initial pitch angle for stabilizer
+
+const int pitch_max = 30;                               //Mechanical limitation (please confirm with ME designer)
+const int pitch_min = -30;                              //Mechanical limitation (please confirm with ME designer)
+
+const int raw_max = 15;                                 //Mechanical limitation (please confirm with ME designer)
+const int raw_min = -15;                                //Mechanical limitation (please confirm with ME designer)
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -507,7 +514,7 @@ void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  printf("Fatal Error -> Please contact Vincent\r\n");
+  printf("Fatal Error -> Please contact Vincent or Jason\r\n");
   /* USER CODE END Error_Handler_Debug */
 }
 
