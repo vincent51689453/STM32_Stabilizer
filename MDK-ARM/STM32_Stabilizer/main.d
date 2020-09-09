@@ -32,3 +32,4 @@ stm32_stabilizer\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
 stm32_stabilizer\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
 stm32_stabilizer\main.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdbool.h
 stm32_stabilizer\main.o: ..\MPU6050\mpu6050.h
+stm32_stabilizer\main.o: ..\PCA9685\pca9685_servo.h

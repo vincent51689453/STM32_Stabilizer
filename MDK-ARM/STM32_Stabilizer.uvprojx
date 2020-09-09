@@ -339,7 +339,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F103xB</Define>
               <Undefine></Undefine>
-              <IncludePath>../Inc;       ../Drivers/STM32F1xx_HAL_Driver/Inc;       ../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;       ../Drivers/CMSIS/Device/ST/STM32F1xx/Include;       ../Drivers/CMSIS/Include;       ..\MPU6050</IncludePath>
+              <IncludePath>../Inc;../Drivers/STM32F1xx_HAL_Driver/Inc;../Drivers/STM32F1xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F1xx/Include;../Drivers/CMSIS/Include;..\MPU6050;..\PCA9685</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -507,6 +507,16 @@
               <FileName>mpu6050.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\MPU6050\mpu6050.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>PCA9685_Lib</GroupName>
+          <Files>
+            <File>
+              <FileName>pca9685_servo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\PCA9685\pca9685_servo.c</FilePath>
             </File>
           </Files>
         </Group>

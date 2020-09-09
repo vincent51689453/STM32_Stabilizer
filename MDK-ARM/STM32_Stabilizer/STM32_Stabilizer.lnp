@@ -20,6 +20,7 @@
 "stm32_stabilizer\stm32f1xx_hal_uart.o"
 "stm32_stabilizer\system_stm32f1xx.o"
 "stm32_stabilizer\mpu6050.o"
+"stm32_stabilizer\pca9685_servo.o"
 --library_type=microlib --strict --scatter "STM32_Stabilizer\STM32_Stabilizer.sct"
 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
 --info sizes --info totals --info unused --info veneers

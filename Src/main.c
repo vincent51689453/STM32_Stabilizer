@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include "stdbool.h" 
 #include "mpu6050.h"
+#include "pca9685_servo.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,6 +47,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c2;
 
 TIM_HandleTypeDef htim4;
 
@@ -54,23 +56,27 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 MPU6050_t MPU6050;                   
 
-volatile int timer_counter = 0;      //timer interrupt counter
+volatile int timer_counter = 0;              //timer interrupt counter
 
-volatile bool MPU_Sampling = false;  //flag to control sampling of MPU6050
-bool average_filter = false;         //flag to control average filtering
-bool plot_curve = true;              //flag to enable/disable curve plotting
+volatile bool MPU_Sampling = false;          //flag to control sampling of MPU6050
+bool average_filter = false;                 //flag to control average filtering
+bool plot_curve = true;                      //flag to enable/disable curve plotting
 
-int counter = 0;                     //sample taking counter
-const int num_samples = 200;         //number of samples for taking average
+int counter = 0;                             //sample taking counter
+const int num_samples = 200;                 //number of samples for taking average
 
-double Kalman_X_buffer = 0;          //Storing num_samples of Kalman_X to perform averaging
-double Kalman_Y_buffer = 0;          //Storing num_samples of Kalman_Y to perform averaging
+double Kalman_X_buffer = 0;                  //Storing num_samples of Kalman_X to perform averaging
+double Kalman_Y_buffer = 0;                  //Storing num_samples of Kalman_Y to perform averaging
 
-double offset_x;                     //noise remoiving from Kalman_X
-double offset_y;                     //noise removing from Kalman_Y
+double offset_x;                             //noise remoiving from Kalman_X
+double offset_y;                             //noise removing from Kalman_Y
 
-double X_output;                     //Resultant X
-double Y_output;                     //Resultant Y
+double X_output;                             //Resultant X
+double Y_output;                             //Resultant Y
+
+enum servo_motor{raw_servo=0,pitch_servo=2}; //Servo motor index related to PCA9685
+const int raw_init_angle = 0;                      //Initial raw angle for stabilizer
+const int pitch_init_angle = 0;                    //Initial pitch angle for stabilizer
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -78,11 +84,13 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_I2C2_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 float trimf(float measurement, float start, float peak, float end);   //Fuzzy Logic: triangular membership function
 float Rmf(float measurement, float top, float bottom);                //Fuzzy Logic: R membership function
 float Lmf(float measurement, float bottom, float top);                //Fuzzy Logic: L membership function
+void servo_control(enum servo_motor,int degree, int wait);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -129,6 +137,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
+  MX_I2C2_Init();
   MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 	//Print system initialization message
@@ -143,6 +152,16 @@ int main(void)
 	
 	//Print MPU6050 connected message
 	printf("[SYSTEM] Connection established...\r\n");
+	
+	enum servo_motor stabilizer;
+
+	
+	PCA9685_Go();                                   //PCA9685 Initialization
+	SetPWMFreq(50);                                 //Set Servo PWM Frequency
+	stabilizer = raw_servo;
+  servo_control(stabilizer,raw_init_angle,200);   //Set raw initial angle
+	stabilizer = pitch_servo;
+	servo_control(stabilizer,pitch_init_angle,200); //Set pitch initial angle
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -268,6 +287,40 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief I2C2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C2_Init(void)
+{
+
+  /* USER CODE BEGIN I2C2_Init 0 */
+
+  /* USER CODE END I2C2_Init 0 */
+
+  /* USER CODE BEGIN I2C2_Init 1 */
+
+  /* USER CODE END I2C2_Init 1 */
+  hi2c2.Instance = I2C2;
+  hi2c2.Init.ClockSpeed = 100000;
+  hi2c2.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c2.Init.OwnAddress1 = 0;
+  hi2c2.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c2.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c2.Init.OwnAddress2 = 0;
+  hi2c2.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c2.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C2_Init 2 */
+
+  /* USER CODE END I2C2_Init 2 */
 
 }
 
@@ -444,6 +497,13 @@ float Lmf(float measurement, float bottom, float top)
 		fx = (measurement-bottom)/(top-bottom);
 	}
 	return fx;
+}
+
+void servo_control(enum servo_motor motor,int degree, int wait)
+{
+	if(motor==raw_servo)   setServo(0,calculate_PWM(degree));  
+	if(motor==pitch_servo) setServo(2,calculate_PWM(degree)); 
+	HAL_Delay(wait);        //Delay for servo mechanical response
 }
 /* USER CODE END 4 */
 

@@ -67,6 +67,10 @@ void Error_Handler(void);
 #define USART_RX_GPIO_Port GPIOA
 #define ONBOARD_LED_Pin GPIO_PIN_5
 #define ONBOARD_LED_GPIO_Port GPIOA
+#define SERVO_SDL_Pin GPIO_PIN_10
+#define SERVO_SDL_GPIO_Port GPIOB
+#define SERVO_SDA_Pin GPIO_PIN_11
+#define SERVO_SDA_GPIO_Port GPIOB
 #define TMS_Pin GPIO_PIN_13
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
