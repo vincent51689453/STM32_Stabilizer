@@ -36,6 +36,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define MIN(x,y) ((x<y)?x:y)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -57,7 +58,7 @@ volatile int timer_counter = 0;      //timer interrupt counter
 
 volatile bool MPU_Sampling = false;  //flag to control sampling of MPU6050
 bool average_filter = false;         //flag to control average filtering
-bool plot_curve = true;             //flag to enable/disable curve plotting
+bool plot_curve = true;              //flag to enable/disable curve plotting
 
 int counter = 0;                     //sample taking counter
 const int num_samples = 200;         //number of samples for taking average
@@ -79,7 +80,9 @@ static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
-
+float trimf(float measurement, float start, float peak, float end);   //Fuzzy Logic: triangular membership function
+float Rmf(float measurement, float top, float bottom);                //Fuzzy Logic: R membership function
+float Lmf(float measurement, float bottom, float top);                //Fuzzy Logic: L membership function
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -188,6 +191,8 @@ int main(void)
 			printf("\r\n");
 			counter++;
 		}
+		
+		//TO-DO: Balancing Control
 		
     /* USER CODE END WHILE */
 
@@ -393,6 +398,52 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			HAL_GPIO_TogglePin(ONBOARD_LED_GPIO_Port,ONBOARD_LED_Pin);
 	  }	
 	}
+}
+
+float trimf(float measurement, float start, float peak, float end)
+{
+	float fx = 0.0;
+	//Triangular Membership Function
+	//Remember: end > peak > start (these values are indicating x axis)
+	if(measurement <= start) fx=0;
+	if((measurement > start)&&(measurement <= peak))
+	{
+		fx = (measurement-start)/(peak-start);
+	}
+	if((measurement < end)&&(measurement > peak))
+	{
+		fx = (end-measurement)/(end-peak);
+	}
+	if(measurement >= end) fx = 0;
+	return fx;	
+}
+
+float Rmf(float measurement, float top, float bottom)
+{
+	float fx = 0.0;
+	//Special Trapezodial function: R-function
+	//Remember: bottom > top (these values are indicating x axis)
+	if(measurement>bottom) fx = 0;
+	if(measurement<top) fx = 1;
+	if((measurement<=bottom)&&(measurement>=top))
+	{
+		fx = (bottom-measurement)/(bottom-top);
+	}
+	return fx;
+}
+
+float Lmf(float measurement, float bottom, float top)
+{
+	float fx = 0.0;
+	//Special Trapezodial function: L-function
+	//Remember: top > bottom (these values are indicating x axis)
+	if(measurement<bottom) fx = 0;
+	if(measurement>top) fx = 0;
+	if((measurement>=bottom)&&(measurement<=top))
+	{
+		fx = (measurement-bottom)/(top-bottom);
+	}
+	return fx;
 }
 /* USER CODE END 4 */
 
