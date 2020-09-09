@@ -3,6 +3,7 @@
   ******************************************************************************
   * @file           : main.c
   * @brief          : Main program body
+	* @author         : VincentChan
   ******************************************************************************
   * @attention
   *
@@ -74,9 +75,9 @@ double offset_y;                             //noise removing from Kalman_Y
 double X_output;                             //Resultant X
 double Y_output;                             //Resultant Y
 
-enum servo_motor{raw_servo=0,pitch_servo=2}; //Servo motor index related to PCA9685
-const int raw_init_angle = 0;                      //Initial raw angle for stabilizer
-const int pitch_init_angle = 0;                    //Initial pitch angle for stabilizer
+enum servo_motor_type{raw_servo=0,pitch_servo=2};       //Servo motor index related to PCA9685
+const int raw_init_angle = 0;                           //Initial raw angle for stabilizer
+const int pitch_init_angle = 0;                         //Initial pitch angle for stabilizer
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -90,7 +91,6 @@ static void MX_TIM4_Init(void);
 float trimf(float measurement, float start, float peak, float end);   //Fuzzy Logic: triangular membership function
 float Rmf(float measurement, float top, float bottom);                //Fuzzy Logic: R membership function
 float Lmf(float measurement, float bottom, float top);                //Fuzzy Logic: L membership function
-void servo_control(enum servo_motor,int degree, int wait);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -153,15 +153,12 @@ int main(void)
 	//Print MPU6050 connected message
 	printf("[SYSTEM] Connection established...\r\n");
 	
-	enum servo_motor stabilizer;
-
-	
-	PCA9685_Go();                                   //PCA9685 Initialization
-	SetPWMFreq(50);                                 //Set Servo PWM Frequency
-	stabilizer = raw_servo;
-  servo_control(stabilizer,raw_init_angle,200);   //Set raw initial angle
-	stabilizer = pitch_servo;
-	servo_control(stabilizer,pitch_init_angle,200); //Set pitch initial angle
+  //Noted that the libraries control the servo motor from 0 - 180
+	PCA9685_Go();                                               //PCA9685 Initialization
+	SetPWMFreq(50);                                             //Set Servo PWM Frequency
+  setServo(pitch_servo,calculate_PWM(pitch_init_angle));      //Set init raw
+	setServo(raw_servo,calculate_PWM(pitch_init_angle));        //Set init pitch
+	HAL_Delay(200);                                             //Delay for servo mechanical response
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -499,12 +496,7 @@ float Lmf(float measurement, float bottom, float top)
 	return fx;
 }
 
-void servo_control(enum servo_motor motor,int degree, int wait)
-{
-	if(motor==raw_servo)   setServo(0,calculate_PWM(degree));  
-	if(motor==pitch_servo) setServo(2,calculate_PWM(degree)); 
-	HAL_Delay(wait);        //Delay for servo mechanical response
-}
+
 /* USER CODE END 4 */
 
 /**
