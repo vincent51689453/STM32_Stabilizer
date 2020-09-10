@@ -13,3 +13,11 @@ This repository is about stabilizer control with MPU6050 and Kalman Filter using
 
 **3. Fuzzy Logic Controller (FLC)**
 ---------------------------
+1. Servo fuzzification
+![image](https://github.com/vincent51689453/STM32_Stabilizer/blob/master/git_image/Servo_FLC.JPG)
+
+2. Error fuzzification
+![image](https://github.com/vincent51689453/STM32_Stabilizer/blob/master/git_image/Error_FLC.JPG)
+
+3. FLC Response
+![image](https://github.com/vincent51689453/STM32_Stabilizer/blob/master/git_image/FLC_Response.JPG)
