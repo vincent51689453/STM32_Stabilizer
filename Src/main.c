@@ -63,7 +63,7 @@ volatile int timer_counter = 0;              //timer interrupt counter
 volatile bool MPU_Sampling = false;          //flag to control sampling of MPU6050
 volatile bool servo_adjust_enable = false;   //flag to control servo balancing
 bool average_filter = false;                 //flag to control average filtering
-bool plot_curve = false;                     //flag to enable/disable curve plotting
+bool plot_curve = true;                     //flag to enable/disable curve plotting
 
 
 int counter = 0;                             //sample taking counter
@@ -80,8 +80,8 @@ double Y_output;                             //Resultant Y
 
 enum servo_motor_type{raw_servo=0,pitch_servo=2};       //Servo motor index related to PCA9685
 
-const int raw_init_angle = 91;                           //Initial raw angle for stabilizer   (make X_output = 0)
-const int pitch_init_angle = 98;                         //Initial pitch angle for stabilizer( make Y_output = 0)
+const int raw_init_angle = 91;                          //Initial raw angle for stabilizer   (make X_output = 0)
+const int pitch_init_angle = 98;                        //Initial pitch angle for stabilizer( make Y_output = 0)
 
 const int pitch_max = 15;                               //Mechanical limitation (please confirm with ME designer)
 const int pitch_min = -15;                              //Mechanical limitation (please confirm with ME designer)
@@ -89,9 +89,13 @@ const int pitch_min = -15;                              //Mechanical limitation 
 const int raw_max = 15;                                 //Mechanical limitation (please confirm with ME designer)
 const int raw_min = -15;                                //Mechanical limitation (please confirm with ME designer)
 
-int adjust_servo_pitch = 0;		               //Fuzzy Logic Output of pitch
-int servo_control_pitch = pitch_init_angle;                 //Operation angle of servo motor (pitch)
-int servo_control_pitch_old = 0;              //Previous operation angle of servo motor (pitch)
+int adjust_servo_pitch = 0;		                          //Fuzzy Logic Output of pitch
+int servo_control_pitch = pitch_init_angle;             //Operation angle of servo motor (pitch)
+int servo_control_pitch_old = 0;                        //Previous operation angle of servo motor (pitch)
+
+int adjust_servo_raw = 0;                               //Fuzzy Logic Output of raw
+int servo_control_raw = raw_init_angle;                 //Operation angle of servo motor (raw)
+int servo_control_raw_old = 0;                          //Previous operation angle of servo motor (raw)
 
 
 /*
@@ -192,6 +196,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+		MPU_Sampling = true;
 		if(MPU_Sampling)
 		{
 			//Read MPU6050 value and processed by Kalman Filter
@@ -226,7 +231,10 @@ int main(void)
 				adjust_servo_pitch = pitch_FLC(X_output);	
 				servo_control_pitch += adjust_servo_pitch;
 				
-				//Protection
+				adjust_servo_raw = raw_FLC(Y_output);
+				servo_control_raw += adjust_servo_raw;
+				
+				//Protection (Pitch servo)
 				if(servo_control_pitch>=(pitch_init_angle+pitch_max))
 				{
 					servo_control_pitch = pitch_init_angle+pitch_max;
@@ -235,11 +243,24 @@ int main(void)
 				{
 					servo_control_pitch = pitch_init_angle+pitch_min;
 				}
+				//Protection (Raw servo)
+				if(servo_control_raw>=(raw_init_angle+raw_max))
+				{
+					servo_control_raw = raw_init_angle+raw_max;
+				}
+				if(servo_control_raw<=(raw_init_angle+raw_min))
+				{
+					servo_control_raw = raw_init_angle+raw_min;
+				}				
+				
+				
 				//Adjustment
-				if(!plot_curve)	printf("servo_control:%d\r\n",servo_control_pitch);
+				if(!plot_curve)	printf("servo_control[pitch]:%d   servo_control[raw]:%d\r\n",servo_control_pitch,servo_control_raw);
 				setServo(pitch_servo,calculate_PWM(servo_control_pitch));
+				setServo(raw_servo,calculate_PWM(servo_control_raw));
         HAL_Delay(200);
 				servo_control_pitch_old = servo_control_pitch;
+				servo_control_raw_old = servo_control_raw;
 				
 			}
 			
@@ -491,7 +512,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  timer_counter++;               //  Interval = 0.01 second	
 		if ((timer_counter%5) == 0)    //  Every 0.05 second
 	  {
-		  MPU_Sampling = !MPU_Sampling;
+		  //MPU_Sampling = !MPU_Sampling;
 			HAL_GPIO_TogglePin(ONBOARD_LED_GPIO_Port,ONBOARD_LED_Pin);
 	  }	
 		if ((timer_counter%100) == 0)
@@ -575,29 +596,65 @@ int pitch_FLC(double error)
 	//1.Fuzzification
 	
 	//define pitch input membership functions and levels
-	//1. N  -> Negative         (the object is sliding down slowly)
-	//2. Z  -> Zero             (the object is still stationary)
-	//3. P  -> Positive         (the object is sliding down slowly)
-
+	//1. LN  -> Largely Negative         (the object is sliding down rapidly)
+	//2. N   -> Negative                 (the object is still stationary)
+	//3. Z   -> Zero                     (the object is stationary)
+	//4. P   -> Positive                 (the object is sliding down slowly)
+  //5. LP  -> Largely Positive         (the object is sliding down rapidly)
 	
   //2.Inferencing
 
-  double w1 = MAX(Rmf(error,-15,-4),trimf(error,-8,-4,0));     //Inference LN & N
-	double w2 = MAX(trimf(error,-8,-4,0),trapmf(error,-6,-6,6,6));
-	double w3 = MAX(trapmf(error,-6,-6,6,6),trimf(error,0,4,8));
-	double w4 = MAX(trimf(error,0,4,8),Lmf(error,4,15));
+  double w1 = MAX(Rmf(error,-15,-4),trimf(error,-10,-6,0));        //Inference LN & N ->(OR)
+	double w2 = MAX(trimf(error,-10,-6,0),trapmf(error,-6,-2,2,6));  //Inference N & Z  ->(OR)
+	double w3 = MAX(trapmf(error,-6,-2,2,6),trimf(error,0,6,10));    //Inference Z & P  ->(OR)
+	double w4 = MAX(trimf(error,0,6,10),Lmf(error,4,15));            //Inference P & LP ->(OR)
 	
-	double i = MAX(w1,w2);
-	double j = MAX(w3,w4);
+	double i = MAX(w1,w2); //Negative OR Zero    ->(OR)
+	double j = MAX(w3,w4); //Positive OR Zero    ->(OR)
 
 	printf("i:%.2f j:%.2f\r\n",i,j);
 	//3.Defuzzification: Weighted Average Method
 	
 	//define servo adjustment membership functions and levels
-	//1. XC  -> Clockwise        
-	//2. UC  -> Unchanged             
-	//3. CC  -> Counterclockwise 
-  servo_adjust = (i*pitch_max+j*pitch_min);
+	//1. XC  -> Clockwise                     
+	//2. CC  -> Counterclockwise 
+  servo_adjust = (i*pitch_max+j*pitch_min);    //Find out ratio of clockwise and and counterclocwise
+	if(!plot_curve)	printf("Servo_adjust: %.2f\r\n",servo_adjust);
+
+	return servo_adjust;
+}
+
+int raw_FLC(double error)
+{
+	double servo_adjust = 0;
+	//This controller should try to keep Y_output = 0 (balance)
+	
+	//1.Fuzzification
+	
+	//define pitch input membership functions and levels
+	//1. LN  -> Largely Negative         (the object is sliding down rapidly)
+	//2. N   -> Negative                 (the object is still stationary)
+	//3. Z   -> Zero                     (the object is stationary)
+	//4. P   -> Positive                 (the object is sliding down slowly)
+  //5. LP  -> Largely Positive         (the object is sliding down rapidly)
+	
+  //2.Inferencing
+
+  double w1 = MAX(Rmf(error,-15,-4),trimf(error,-10,-6,0));        //Inference LN & N ->(OR)
+	double w2 = MAX(trimf(error,-10,-6,0),trapmf(error,-6,-2,2,6));  //Inference N & Z  ->(OR)
+	double w3 = MAX(trapmf(error,-6,-2,2,6),trimf(error,0,6,10));    //Inference Z & P  ->(OR)
+	double w4 = MAX(trimf(error,0,6,10),Lmf(error,4,15));            //Inference P & LP ->(OR)
+	
+	double i = MAX(w1,w2); //Negative OR Zero    ->(OR)
+	double j = MAX(w3,w4); //Positive OR Zero    ->(OR)
+
+	printf("i:%.2f j:%.2f\r\n",i,j);
+	//3.Defuzzification: Weighted Average Method
+	
+	//define servo adjustment membership functions and levels
+	//1. XC  -> Clockwise                     
+	//2. CC  -> Counterclockwise 
+  servo_adjust = (i*pitch_max+j*pitch_min);    //Find out ratio of clockwise and and counterclocwise
 	if(!plot_curve)	printf("Servo_adjust: %.2f\r\n",servo_adjust);
 
 	return servo_adjust;
