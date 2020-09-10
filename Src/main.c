@@ -61,7 +61,6 @@ MPU6050_t MPU6050;
 volatile int timer_counter = 0;              //timer interrupt counter
 
 volatile bool MPU_Sampling = false;          //flag to control sampling of MPU6050
-volatile bool servo_adjust_enable = false;   //flag to control servo balancing
 bool average_filter = false;                 //flag to control average filtering
 bool plot_curve = true;                     //flag to enable/disable curve plotting
 
@@ -196,7 +195,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-		MPU_Sampling = true;
 		if(MPU_Sampling)
 		{
 			//Read MPU6050 value and processed by Kalman Filter
@@ -512,13 +510,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  timer_counter++;               //  Interval = 0.01 second	
 		if ((timer_counter%5) == 0)    //  Every 0.05 second
 	  {
-		  //MPU_Sampling = !MPU_Sampling;
+		  MPU_Sampling = !MPU_Sampling;
 			HAL_GPIO_TogglePin(ONBOARD_LED_GPIO_Port,ONBOARD_LED_Pin);
 	  }	
-		if ((timer_counter%100) == 0)
-		{
-			servo_adjust_enable = !servo_adjust_enable;
-		}
 	}
 }
 
