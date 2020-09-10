@@ -78,11 +78,6 @@ double offset_y;                             //noise removing from Kalman_Y
 double X_output;                             //Resultant X
 double Y_output;                             //Resultant Y
 
-
-int adjust_servo_pitch = 0;		
-int servo_control_pitch = 0;
-
-
 enum servo_motor_type{raw_servo=0,pitch_servo=2};       //Servo motor index related to PCA9685
 
 const int raw_init_angle = 91;                           //Initial raw angle for stabilizer   (make X_output = 0)
@@ -93,6 +88,10 @@ const int pitch_min = -15;                              //Mechanical limitation 
 
 const int raw_max = 15;                                 //Mechanical limitation (please confirm with ME designer)
 const int raw_min = -15;                                //Mechanical limitation (please confirm with ME designer)
+
+int adjust_servo_pitch = 0;		               //Fuzzy Logic Output of pitch
+int servo_control_pitch = pitch_init_angle;                 //Operation angle of servo motor (pitch)
+int servo_control_pitch_old = 0;              //Previous operation angle of servo motor (pitch)
 
 
 /*
@@ -112,9 +111,10 @@ static void MX_I2C1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
-float trimf(float measurement, float start, float peak, float end);   //Fuzzy Logic: triangular membership function
-float Rmf(float measurement, float top, float bottom);                //Fuzzy Logic: R membership function
-float Lmf(float measurement, float bottom, float top);                //Fuzzy Logic: L membership function
+float trimf(float measurement, float start, float peak, float end);             //Fuzzy Logic: triangular membership function
+float Rmf(float measurement, float top, float bottom);                          //Fuzzy Logic: R membership function
+float Lmf(float measurement, float bottom, float top);                          //Fuzzy Logic: L membership function
+float trapmf(float measurement, float start,float top_1,float top_2,float end); //Fuzzy Logic: trapezodial membership function
 
 int raw_FLC(double error);          //raw fuzzy logic controller
 int pitch_FLC(double error);        //pitch fuzzy logic controller
@@ -223,23 +223,23 @@ int main(void)
 				}
 				
 				//Fuzzy Logic Balancing
-				if(servo_adjust_enable)
-				{
-				  adjust_servo_pitch = pitch_FLC(X_output);	
-				  servo_control_pitch = pitch_init_angle + adjust_servo_pitch;	
-				  //Protection
-				  if(servo_control_pitch>=(pitch_init_angle+pitch_max))
-				  {
-					  servo_control_pitch = pitch_init_angle+pitch_max;
-				  }
-				  if(servo_control_pitch<=(pitch_init_angle+pitch_min))
-				  {
-					  servo_control_pitch = pitch_init_angle+pitch_min;
-				  }
+				adjust_servo_pitch = pitch_FLC(X_output);	
+				servo_control_pitch += adjust_servo_pitch;
 				
-				  if(!plot_curve)	printf("servo_control:%d\r\n",servo_control_pitch);
-				  setServo(pitch_servo,calculate_PWM(servo_control_pitch));
-			  }
+				//Protection
+				if(servo_control_pitch>=(pitch_init_angle+pitch_max))
+				{
+					servo_control_pitch = pitch_init_angle+pitch_max;
+				}
+				if(servo_control_pitch<=(pitch_init_angle+pitch_min))
+				{
+					servo_control_pitch = pitch_init_angle+pitch_min;
+				}
+				//Adjustment
+				if(!plot_curve)	printf("servo_control:%d\r\n",servo_control_pitch);
+				setServo(pitch_servo,calculate_PWM(servo_control_pitch));
+        HAL_Delay(200);
+				servo_control_pitch_old = servo_control_pitch;
 				
 			}
 			
@@ -547,9 +547,29 @@ float Lmf(float measurement, float bottom, float top)
 	return fx;
 }
 
+float trapmf(float measurement, float start,float top_1,float top_2,float end)
+{
+  float fx = 0.0;
+	//Trapezodial function
+	//Remember: start < top_1 < top_2 <end
+	if((measurement < start)||(measurement > end)) fx = 0;
+	if((measurement >= start)&&(measurement <= top_1))
+	{
+		fx = (measurement-start)/(top_1-start);
+	}
+	if((measurement>=top_1)&&(measurement<=top_2))
+	{
+		fx = 1;
+	}
+	if((measurement>=top_2)&&(measurement<=end))
+	{
+		fx = (end-measurement)/(end-top_2);
+	}
+	return fx;
+}
 int pitch_FLC(double error)
 {
-	int servo_adjust = 0;
+	double servo_adjust = 0;
 	//This controller should try to keep Y_output = 0 (balance)
 	
 	//1.Fuzzification
@@ -562,18 +582,23 @@ int pitch_FLC(double error)
 	
   //2.Inferencing
 
-  double w1 = MAX(Rmf(error,-15,-6),trimf(error,-10,0,10));     //Inference LN & N
-	double w2 = MAX(trimf(error,-10,0,10),Lmf(error,6,15));          //Inference P & LP
+  double w1 = MAX(Rmf(error,-15,-4),trimf(error,-8,-4,0));     //Inference LN & N
+	double w2 = MAX(trimf(error,-8,-4,0),trapmf(error,-6,-6,6,6));
+	double w3 = MAX(trapmf(error,-6,-6,6,6),trimf(error,0,4,8));
+	double w4 = MAX(trimf(error,0,4,8),Lmf(error,4,15));
+	
+	double i = MAX(w1,w2);
+	double j = MAX(w3,w4);
 
-	printf("w1:%.2f w2:%.2f\r\n",w1,w2);
+	printf("i:%.2f j:%.2f\r\n",i,j);
 	//3.Defuzzification: Weighted Average Method
 	
 	//define servo adjustment membership functions and levels
 	//1. XC  -> Clockwise        
 	//2. UC  -> Unchanged             
 	//3. CC  -> Counterclockwise 
-  servo_adjust = (w1*pitch_max+w2*pitch_min)/(w1+w2);
-	if(!plot_curve)	printf("Servo_adjust: %d\r\n",servo_adjust);
+  servo_adjust = (i*pitch_max+j*pitch_min);
+	if(!plot_curve)	printf("Servo_adjust: %.2f\r\n",servo_adjust);
 
 	return servo_adjust;
 }
